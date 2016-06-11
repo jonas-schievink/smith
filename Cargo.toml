@@ -1,0 +1,18 @@
+[package]
+name = "smith"
+version = "0.1.0"
+authors = ["Jonas Schievink <jonas@schievink.net>"]
+license = "CC0"
+description = "A simple SSH agent"
+
+[dependencies]
+log = "0.3"
+env_logger = "0.3"
+clap = "2.0"
+tempdir = "0.3"
+unix_socket = "0.5"
+libc = "0.2"
+byteorder = "0.5"
+base64 = "0.2"
+#openssl = "0.7"
+openssl = { git = "https://github.com/jonas-schievink/rust-openssl.git", branch = "passwd-callbacks" }
