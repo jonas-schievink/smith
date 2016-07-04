@@ -15,4 +15,7 @@ libc = "0.2"
 byteorder = "0.5"
 base64 = "0.2"
 #openssl = "0.7"
-openssl = { git = "https://github.com/jonas-schievink/rust-openssl.git", branch = "passwd-callbacks" }
+
+[dependencies.openssl]
+git = "https://github.com/sfackler/rust-openssl.git"
+features = [ "catch_unwind" ]
