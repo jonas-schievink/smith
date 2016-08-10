@@ -1,7 +1,7 @@
 [package]
 name = "smith"
 version = "0.1.0"
-authors = ["Jonas Schievink <jonas@schievink.net>"]
+authors = ["Jonas Schievink <jonasschievink@gmail.com>"]
 license = "CC0"
 description = "A simple SSH agent"
 
