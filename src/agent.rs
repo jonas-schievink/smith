@@ -10,7 +10,8 @@ use openssl::crypto::hash::{self, Hasher};
 
 use std::env;
 use std::path::PathBuf;
-use std::io::{self, Write};
+use std::io;
+use std::io::prelude::*;
 use std::fs::{self, File};
 use std::ffi::OsStr;
 
@@ -169,7 +170,9 @@ impl Agent {
             info!("attempting to unlock {} ({})", priv_path.display(), pubkey.comment);
 
             let mut priv_file = try!(File::open(priv_path));
-            let private_key = try!(RSA::private_key_from_pem_cb(&mut priv_file, |buf| {
+            let mut pem_data = Vec::new();
+            try!(priv_file.read_to_end(&mut pem_data));
+            let private_key = try!(RSA::private_key_from_pem_cb(&pem_data, |buf| {
                 PasswordPrompt::new(pubkey.comment.clone()).invoke(buf)
             }).map_err(|_| io::Error::new(io::ErrorKind::Other, "ssl error :(")));   // FIXME :-(
 
@@ -199,9 +202,9 @@ impl Agent {
                     Ok(priv_index) => {
                         debug!("performing sign request with unlocked private key #{}", priv_index);
                         let (ref pubkey, ref pkey) = self.loaded_keys[priv_index];
-                        let mut sha = Hasher::new(hash::Type::SHA1);
+                        let mut sha = Hasher::new(hash::Type::SHA1).unwrap();
                         sha.write_all(&data).unwrap();
-                        let digest = sha.finish();
+                        let digest = sha.finish().unwrap();
                         let signature = pkey.sign(hash::Type::SHA1, &digest).unwrap();
 
                         Response::SignResponse {

@@ -3,7 +3,7 @@ name = "smith"
 version = "0.1.0"
 authors = ["Jonas Schievink <jonasschievink@gmail.com>"]
 license = "CC0"
-description = "A simple SSH agent"
+description = "A simple SSH agent with lazy unlocking"
 
 [dependencies]
 log = "0.3"
@@ -14,8 +14,4 @@ unix_socket = "0.5"
 libc = "0.2"
 byteorder = "0.5"
 base64 = "0.2"
-#openssl = "0.7"
-
-[dependencies.openssl]
-git = "https://github.com/sfackler/rust-openssl.git"
-features = [ "catch_unwind" ]
+openssl = "0.8"
