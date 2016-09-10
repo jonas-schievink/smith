@@ -28,6 +28,10 @@ fn process_args(args: &ArgMatches, conf: &mut AgentConfig) -> Result<(), Box<Err
         conf.auth_sock = Some(sock.to_string());
     }
 
+    if args.is_present("force") {
+        conf.remove_sock = true;
+    }
+
     Ok(())
 }
 
@@ -67,6 +71,10 @@ fn main() {
                       .arg(Arg::with_name("debug")
                                .short("d")
                                .help("Enable debug output"))
+                      .arg(Arg::with_name("force")
+                               .short("f")
+                               .long("force")
+                               .help("Overwrite the socket file if it already exists"))
                       .get_matches();
 
     init_logger(&matches);

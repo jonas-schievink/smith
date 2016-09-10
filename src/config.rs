@@ -12,4 +12,6 @@ pub struct AgentConfig {
     /// The socket to listen on can be configured by setting the `SSH_AUTH_SOCK` environment
     /// variable before starting the agent.
     pub auth_sock: Option<String>,
+    /// If `true`, we'll try to delete an existing socket file instead of exiting with an error.
+    pub remove_sock: bool,
 }

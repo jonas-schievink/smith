@@ -109,8 +109,14 @@ impl Agent {
                 path
             }
         };
+
+        if conf.remove_sock && fs::metadata(&sock_path).is_ok() {
+            info!("removing existing socket file {}", sock_path.display());
+            fs::remove_file(&sock_path).unwrap();    // FIXME don't unwrap
+        }
+
         info!("binding to {}", sock_path.display());
-        let listener = UnixListener::bind(&sock_path).unwrap();
+        let listener = UnixListener::bind(&sock_path).unwrap(); // FIXME don't unwrap
 
         Agent {
             conf: conf,
