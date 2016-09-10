@@ -1,5 +1,7 @@
 extern crate smith;
 
+#[macro_use]
+extern crate log;
 extern crate env_logger;
 extern crate clap;
 
@@ -9,8 +11,11 @@ use smith::config::AgentConfig;
 use smith::shells::Shell;
 
 use clap::{Arg, App, ArgMatches};
+use env_logger::LogBuilder;
+use log::LogLevelFilter;
 use std::error::Error;
 use std::str::FromStr;
+use std::env;
 
 /// Processes command line arguments by overwriting parts of the `AgentConfig` that are specified in
 /// `args`.
@@ -26,8 +31,26 @@ fn process_args(args: &ArgMatches, conf: &mut AgentConfig) -> Result<(), Box<Err
     Ok(())
 }
 
+fn init_logger(args: &ArgMatches) {
+    let mut builder = LogBuilder::new();
+    builder.format(|record| {
+        format!("[{}] {}: {}", record.level(), record.location().module_path(), record.args())
+    });
+
+    let default_level = if args.is_present("debug") {
+        LogLevelFilter::Debug
+    } else {
+        LogLevelFilter::Info
+    };
+    builder.filter(None, default_level);
+
+    if let Ok(s) = env::var("RUST_LOG") {
+        builder.parse(&s);
+    }
+    builder.init().unwrap();
+}
+
 fn main() {
-    env_logger::init().unwrap();
     let matches = App::new(env!("CARGO_PKG_NAME"))
                       .version(env!("CARGO_PKG_VERSION"))
                       .author(env!("CARGO_PKG_AUTHORS"))
@@ -45,6 +68,8 @@ fn main() {
                                .short("d")
                                .help("Enable debug output"))
                       .get_matches();
+
+    init_logger(&matches);
 
     let mut agent_conf = AgentConfig::default();
     util::unwrap_or_exit(process_args(&matches, &mut agent_conf));
