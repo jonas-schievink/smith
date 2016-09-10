@@ -97,12 +97,12 @@ pub struct Agent {
 
 impl Agent {
     /// Creates a new agent instance from the given configuration.
-    pub fn new(conf: AgentConfig) -> Self {
+    pub fn new(conf: AgentConfig) -> io::Result<Self> {
         let mut my_tempdir = None;
         let sock_path = match conf.auth_sock {
             Some(ref sock) => PathBuf::from(sock),
             None => {
-                let tempdir = TempDir::new(concat!(env!("CARGO_PKG_NAME"), "-")).unwrap();
+                let tempdir = try!(TempDir::new(concat!(env!("CARGO_PKG_NAME"), "-")));
                 let mut path = tempdir.path().to_path_buf();
                 path.push("agent.sock");
                 my_tempdir = Some(tempdir);
@@ -112,20 +112,20 @@ impl Agent {
 
         if conf.remove_sock && fs::metadata(&sock_path).is_ok() {
             info!("removing existing socket file {}", sock_path.display());
-            fs::remove_file(&sock_path).unwrap();    // FIXME don't unwrap
+            try!(fs::remove_file(&sock_path));
         }
 
         info!("binding to {}", sock_path.display());
-        let listener = UnixListener::bind(&sock_path).unwrap(); // FIXME don't unwrap
+        let listener = try!(UnixListener::bind(&sock_path));
 
-        Agent {
+        Ok(Agent {
             conf: conf,
             _tempdir: my_tempdir,
             listener: Some(listener),
             sock_path: sock_path,
             loaded_keys: Vec::new(),
             lazy_keys: preload_keys(),
-        }
+        })
     }
 
     /// If configured to do so, this will output a shell script to set the SSH environment variables

@@ -82,7 +82,7 @@ fn main() {
     let mut agent_conf = AgentConfig::default();
     util::unwrap_or_exit(process_args(&matches, &mut agent_conf));
 
-    let mut agent = Agent::new(agent_conf);
+    let mut agent = util::unwrap_or_exit(Agent::new(agent_conf));
     agent.output_env_vars();
     agent.run();
 }
