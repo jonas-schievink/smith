@@ -196,8 +196,8 @@ impl Agent {
         Ok(priv_index)
     }
 
-    fn process_request(&mut self, req: Request) -> Response {
-        match req {
+    fn process_request(&mut self, req: &Request) -> Response {
+        match *req {
             Request::RequestIdentities => {
                 Response::Identities(self.list_identities())
             }
@@ -236,9 +236,16 @@ impl Agent {
             let req = try!(Request::read(&mut stream));
             debug!("request: {:?}", req);
 
-            let response = self.process_request(req);
+            let response = self.process_request(&req);
             debug!("response: {:?}", response);
             try!(response.write(&mut stream));
+
+            // Close all connections after answering their first `SignRequest`. Otherwise, the
+            // connection would stay open for the whole duration of the SSH session, allowing only
+            // a single connection to exist.
+            if let Request::SignRequest { .. } = req {
+                return Ok(());
+            }
         }
 
         // Apparently the client will just shut the connection down, which is reflected as an `Err`.
