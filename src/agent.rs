@@ -208,6 +208,7 @@ impl Agent {
                     Ok(priv_index) => {
                         debug!("performing sign request with unlocked private key #{}", priv_index);
                         let (ref pubkey, ref pkey) = self.loaded_keys[priv_index];
+                        info!("signing with key {}", pubkey.comment);
                         let mut sha = Hasher::new(hash::Type::SHA1).unwrap();
                         sha.write_all(&data).unwrap();
                         let digest = sha.finish().unwrap();
@@ -232,6 +233,8 @@ impl Agent {
     fn handle_incoming(&mut self, stream_result: io::Result<UnixStream>) -> io::Result<()> {
         let mut stream = try!(stream_result);
 
+        info!("incoming connection");
+
         loop {
             let req = try!(Request::read(&mut stream));
             debug!("request: {:?}", req);
@@ -243,7 +246,9 @@ impl Agent {
             // Close all connections after answering their first `SignRequest`. Otherwise, the
             // connection would stay open for the whole duration of the SSH session, allowing only
             // a single connection to exist.
+            // FIXME: The proper way to fix this would be to use non-blocking I/O
             if let Request::SignRequest { .. } = req {
+                info!("handled sign request, early exit (FIXME)");
                 return Ok(());
             }
         }
@@ -257,8 +262,6 @@ impl Agent {
         let listener = self.listener.take().expect("self.listener is None, did someone call \
                                                     Agent::run recursively?");
         for res in listener.incoming() {
-            info!("incoming connection");
-
             if let Err(e) = self.handle_incoming(res) {
                 error!("{:?}: {}", e.kind(), e);
             }
