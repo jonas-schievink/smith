@@ -157,7 +157,7 @@ impl Agent {
     }
 
     /// Finds the private key belonging to the given public key blob. If the private key is not yet
-    /// unlocked, but it's pubkey was loaded for lazy unlocking, this will prompt the user to
+    /// unlocked, but its pubkey was loaded for lazy unlocking, this will prompt the user to
     /// unlock the key.
     ///
     /// If successful, returns the index in `self.loaded_key` where the private key can be found.
