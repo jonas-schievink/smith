@@ -19,7 +19,7 @@ impl PasswordPrompt {
     /// Invokes the password prompt and puts the entered password into `password_buffer`.
     ///
     /// Returns the number of bytes input into the buffer.
-    pub fn invoke(&self, password_buffer: &mut [i8]) -> usize {
+    pub fn invoke(&self, password_buffer: &mut [u8]) -> usize {
         let mut pinentry = Command::new("pinentry")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -43,7 +43,7 @@ impl PasswordPrompt {
             } else if line.starts_with("D ") {
                 let bytes = &line.as_bytes()[2..];
                 for (byte, target) in bytes.iter().zip(password_buffer.iter_mut()) {
-                    *target = *byte as i8;
+                    *target = *byte;
                 }
 
                 pinentry.kill().unwrap();

@@ -2,7 +2,7 @@
 //!
 //! Currently, we only support RSA keys.
 
-use openssl::crypto::rsa::RSA;
+use openssl::rsa::Rsa;
 
 use std::io;
 use std::io::prelude::*;
@@ -14,7 +14,7 @@ pub enum KeyType {
 
 /// A private SSH key.
 pub enum PrivateKey {
-    Rsa(RSA),
+    Rsa(Rsa),
 }
 
 impl PrivateKey {

@@ -5,8 +5,10 @@ use pubkey::Pubkey;
 
 use tempdir::TempDir;
 use unix_socket::{UnixListener, UnixStream};
-use openssl::crypto::rsa::RSA;
-use openssl::crypto::hash::{self, Hasher};
+use openssl::rsa::Rsa;
+use openssl::hash::{self, Hasher};
+use openssl::sign::Signer;
+use openssl::pkey::PKey;
 
 use std::env;
 use std::path::PathBuf;
@@ -89,7 +91,7 @@ pub struct Agent {
     sock_path: PathBuf,
 
     /// Loaded (unlocked) private keys.
-    loaded_keys: Vec<(Pubkey, RSA)>,
+    loaded_keys: Vec<(Pubkey, PKey)>,
     /// List of public keys and absolute paths to their private counterparts we want to unlock
     /// lazily.
     lazy_keys: Vec<(Pubkey, PathBuf)>,
@@ -178,11 +180,13 @@ impl Agent {
             let mut priv_file = try!(File::open(priv_path));
             let mut pem_data = Vec::new();
             try!(priv_file.read_to_end(&mut pem_data));
-            let private_key = try!(RSA::private_key_from_pem_cb(&pem_data, |buf| {
-                PasswordPrompt::new(pubkey.comment.clone()).invoke(buf)
+            let private_key = try!(Rsa::private_key_from_pem_callback(&pem_data, |buf| {
+                Ok(PasswordPrompt::new(pubkey.comment.clone()).invoke(buf))
             }).map_err(|_| io::Error::new(io::ErrorKind::Other, "ssl error :(")));   // FIXME :-(
 
-            self.loaded_keys.push(((*pubkey).clone(), private_key));
+            let pkey = PKey::from_rsa(private_key).unwrap();
+
+            self.loaded_keys.push(((*pubkey).clone(), pkey));
 
             (self.loaded_keys.len() - 1, index)
         } else {
@@ -209,10 +213,15 @@ impl Agent {
                         debug!("performing sign request with unlocked private key #{}", priv_index);
                         let (ref pubkey, ref pkey) = self.loaded_keys[priv_index];
                         info!("signing with key {}", pubkey.comment);
-                        let mut sha = Hasher::new(hash::Type::SHA1).unwrap();
+
+
+                        let mut sha = Hasher::new(hash::MessageDigest::sha1()).unwrap();
                         sha.write_all(&data).unwrap();
-                        let digest = sha.finish().unwrap();
-                        let signature = pkey.sign(hash::Type::SHA1, &digest).unwrap();
+                        let digest = sha.finish2().unwrap().to_vec();
+
+                        let mut signer = Signer::new(hash::MessageDigest::sha1(), &pkey).unwrap();
+                        signer.update(&digest).unwrap();
+                        let signature = signer.finish().unwrap();
 
                         Response::SignResponse {
                             key_format: pubkey.key_type.clone(),
