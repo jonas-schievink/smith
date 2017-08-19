@@ -80,7 +80,6 @@ fn preload_keys() -> Vec<(Pubkey, PathBuf)> {
 }
 
 pub struct Agent {
-    conf: AgentConfig,
     /// We hold on to an optional `TempDir` when we create a temporary directory for the socket
     /// outselves. When dropped, it will delete the directory. However, that rarely happens since
     /// destructors don't run when we're killed by a signal, so this is basically useless.
@@ -88,7 +87,6 @@ pub struct Agent {
     /// The unix domain socket listener. `None` when we're currently listening. This option dance
     /// prevents borrow conflicts.
     listener: Option<UnixListener>,
-    sock_path: PathBuf,
 
     /// Loaded (unlocked) private keys.
     loaded_keys: Vec<(Pubkey, PKey)>,
@@ -121,10 +119,8 @@ impl Agent {
         let listener = try!(UnixListener::bind(&sock_path));
 
         Ok(Agent {
-            conf: conf,
             _tempdir: my_tempdir,
             listener: Some(listener),
-            sock_path: sock_path,
             loaded_keys: Vec::new(),
             lazy_keys: preload_keys(),
         })
