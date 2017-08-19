@@ -29,21 +29,21 @@ impl Pubkey {
         // FIXME we should probably accept all whitespace, but `split_whitespace_n` isn't a thing
         let mut splitn = pub_file.splitn(3, ' ');
         let key_type = splitn.next().unwrap().trim();
-        let data_encoded = try!(splitn.next().ok_or(io::Error::new(io::ErrorKind::InvalidData,
-                                                                   "no pubkey data blob found")));
+        let data_encoded = splitn.next().ok_or(io::Error::new(io::ErrorKind::InvalidData,
+                                                              "no pubkey data blob found"))?;
         let comment = splitn.next().unwrap_or("");
 
         Ok(Pubkey {
             key_type: key_type.to_string(),
-            data: try!(base64::decode(data_encoded.trim())
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))),
+            data: base64::decode(data_encoded.trim())
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?,
             comment: comment.trim().to_string(),
         })
     }
 
     pub fn from_pub_file<R: Read>(r: &mut R) -> io::Result<Self> {
         let mut content = String::new();
-        try!(r.read_to_string(&mut content));
+        r.read_to_string(&mut content)?;
         Pubkey::from_pub_file_contents(content)
     }
 }

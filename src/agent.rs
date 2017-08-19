@@ -102,7 +102,7 @@ impl Agent {
         let sock_path = match conf.auth_sock {
             Some(ref sock) => PathBuf::from(sock),
             None => {
-                let tempdir = try!(TempDir::new(concat!(env!("CARGO_PKG_NAME"), "-")));
+                let tempdir = TempDir::new(concat!(env!("CARGO_PKG_NAME"), "-"))?;
                 let mut path = tempdir.path().to_path_buf();
                 path.push("agent.sock");
                 my_tempdir = Some(tempdir);
@@ -112,11 +112,11 @@ impl Agent {
 
         if conf.remove_sock && fs::metadata(&sock_path).is_ok() {
             info!("removing existing socket file {}", sock_path.display());
-            try!(fs::remove_file(&sock_path));
+            fs::remove_file(&sock_path)?;
         }
 
         info!("binding to {}", sock_path.display());
-        let listener = try!(UnixListener::bind(&sock_path));
+        let listener = UnixListener::bind(&sock_path)?;
 
         Ok(Agent {
             _tempdir: my_tempdir,
@@ -164,12 +164,12 @@ impl Agent {
             // from `self.lazy_keys` and put it in `self.loaded_keys`.
             info!("attempting to unlock {} ({})", priv_path.display(), pubkey.comment);
 
-            let mut priv_file = try!(File::open(priv_path));
+            let mut priv_file = File::open(priv_path)?;
             let mut pem_data = Vec::new();
-            try!(priv_file.read_to_end(&mut pem_data));
-            let private_key = try!(Rsa::private_key_from_pem_callback(&pem_data, |buf| {
+            priv_file.read_to_end(&mut pem_data)?;
+            let private_key = Rsa::private_key_from_pem_callback(&pem_data, |buf| {
                 Ok(PasswordPrompt::new(pubkey.comment.clone()).invoke(buf))
-            }).map_err(|_| io::Error::new(io::ErrorKind::Other, "ssl error :(")));   // FIXME :-(
+            }).map_err(|_| io::Error::new(io::ErrorKind::Other, "ssl error :("))?;   // FIXME :-(
 
             let pkey = PKey::from_rsa(private_key).unwrap();
 
@@ -227,17 +227,17 @@ impl Agent {
     }
 
     fn handle_incoming(&mut self, stream_result: io::Result<UnixStream>) -> io::Result<()> {
-        let mut stream = try!(stream_result);
+        let mut stream = stream_result?;
 
         info!("incoming connection");
 
         loop {
-            let req = try!(Request::read(&mut stream));
+            let req = Request::read(&mut stream)?;
             debug!("request: {:?}", req);
 
             let response = self.process_request(&req);
             debug!("response: {:?}", response);
-            try!(response.write(&mut stream));
+            response.write(&mut stream)?;
 
             // Close all connections after answering their first `SignRequest`. Otherwise, the
             // connection would stay open for the whole duration of the SSH session, allowing only

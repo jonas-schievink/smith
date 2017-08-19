@@ -56,14 +56,14 @@ const MESSAGE_LENGTH_LIMIT: u32 = 4096;
 /// Read a `string` field as specified by the protocol. Can include arbitrary bytes, so it's more
 /// like a blob, which is why this returns a `Vec<u8>`.
 fn read_string<R: BufRead>(r: &mut R) -> io::Result<Vec<u8>> {
-    let len = try!(r.read_u32::<BigEndian>());
+    let len = r.read_u32::<BigEndian>()?;
     let mut buf = vec![0; len as usize];
-    try!(r.read_exact(&mut buf));
+    r.read_exact(&mut buf)?;
     Ok(buf)
 }
 
 fn write_string<W: Write>(w: &mut W, string: &[u8]) -> io::Result<()> {
-    try!(w.write_u32::<BigEndian>(string.len() as u32));
+    w.write_u32::<BigEndian>(string.len() as u32)?;
     w.write_all(string)
 }
 
@@ -72,14 +72,14 @@ fn write_string<W: Write>(w: &mut W, string: &[u8]) -> io::Result<()> {
 ///
 /// The maximum message length is limited by `MESSAGE_LENGTH_LIMIT`.
 fn read_message<R: Read>(r: &mut R) -> io::Result<Vec<u8>> {
-    let length = try!(r.read_u32::<BigEndian>());
+    let length = r.read_u32::<BigEndian>()?;
     if length > MESSAGE_LENGTH_LIMIT {
         return Err(io::Error::new(io::ErrorKind::InvalidInput,
                                   "message length limit exceeded"));
     }
 
     let mut buf = vec![0; length as usize];
-    try!(r.read_exact(&mut buf));
+    r.read_exact(&mut buf)?;
 
     Ok(buf)
 }
@@ -131,16 +131,16 @@ pub enum Request {
 impl Request {
     /// Reads a request sent by a client connected to the agent.
     pub fn read<R: Read>(r: &mut R) -> io::Result<Self> {
-        let buf = try!(read_message(r));
+        let buf = read_message(r)?;
         let mut buf = &buf[..];
 
-        match try!(buf.read_u8()) {
+        match buf.read_u8()? {
             SSH2_AGENTC_REQUEST_IDENTITIES => Ok(Request::RequestIdentities),
             SSH2_AGENTC_SIGN_REQUEST => {
                 Ok(Request::SignRequest {
-                    pubkey_blob: try!(read_string(&mut buf)),
-                    data: try!(read_string(&mut buf)),
-                    flags: try!(buf.read_u32::<BigEndian>()),
+                    pubkey_blob: read_string(&mut buf)?,
+                    data: read_string(&mut buf)?,
+                    flags: buf.read_u32::<BigEndian>()?,
                 })
             }
             unknown => {
@@ -157,19 +157,19 @@ impl Request {
         let mut buf = Vec::new();
 
         match *self {
-            Request::RequestIdentities => try!(buf.write_u8(SSH2_AGENTC_REQUEST_IDENTITIES)),
+            Request::RequestIdentities => buf.write_u8(SSH2_AGENTC_REQUEST_IDENTITIES)?,
             Request::SignRequest { ref pubkey_blob, ref data, ref flags } => {
-                try!(buf.write_u8(SSH2_AGENTC_SIGN_REQUEST));
-                try!(write_string(&mut buf, pubkey_blob));
-                try!(write_string(&mut buf, data));
-                try!(buf.write_u32::<BigEndian>(*flags));
+                buf.write_u8(SSH2_AGENTC_SIGN_REQUEST)?;
+                write_string(&mut buf, pubkey_blob)?;
+                write_string(&mut buf, data)?;
+                buf.write_u32::<BigEndian>(*flags)?;
             }
 
             Request::Unknown => panic!("attempted to encode `Unknown` request type"),
         }
 
-        try!(w.write_u32::<BigEndian>(buf.len() as u32));
-        try!(w.write_all(&buf));
+        w.write_u32::<BigEndian>(buf.len() as u32)?;
+        w.write_all(&buf)?;
         Ok(())
     }
 }
@@ -206,16 +206,16 @@ pub enum Response {
 impl Response {
     /// Reads and parses a response sent by an SSH agent.
     pub fn read<R: Read>(r: &mut R) -> io::Result<Self> {
-        let buf = try!(read_message(r));
+        let buf = read_message(r)?;
         let mut buf = &buf[..];
 
-        match try!(buf.read_u8()) {
+        match buf.read_u8()? {
             SSH2_AGENT_IDENTITIES_ANSWER => {
                 let mut idents = Vec::new();
-                let num = try!(buf.read_u32::<BigEndian>());
+                let num = buf.read_u32::<BigEndian>()?;
                 for _ in 0..num {
-                    let blob = try!(read_string(&mut buf));
-                    let comment = try!(read_string(&mut buf));
+                    let blob = read_string(&mut buf)?;
+                    let comment = read_string(&mut buf)?;
 
                     idents.push(Identity {
                         key_blob: blob,
@@ -226,14 +226,14 @@ impl Response {
                 Ok(Response::Identities(idents))
             },
             SSH2_AGENT_SIGN_RESPONSE => {
-                let full_sig = try!(read_string(&mut buf));
+                let full_sig = read_string(&mut buf)?;
                 let mut full_sig = &full_sig[..];
-                let key_format = try!(read_string(&mut full_sig));
+                let key_format = read_string(&mut full_sig)?;
                 let signature = &full_sig[..];   // rest of the "full" signature
 
                 Ok(Response::SignResponse {
-                    key_format: try!(String::from_utf8(key_format)
-                        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))),
+                    key_format: String::from_utf8(key_format)
+                        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?,
                     signature: Vec::from(signature),
                 })
             }
@@ -249,30 +249,30 @@ impl Response {
         let mut buf = Vec::new();
 
         match *self {
-            Response::Success => try!(buf.write_all(&[SSH_AGENT_SUCCESS])),
-            Response::Failure => try!(buf.write_all(&[SSH_AGENT_FAILURE])),
+            Response::Success => buf.write_all(&[SSH_AGENT_SUCCESS])?,
+            Response::Failure => buf.write_all(&[SSH_AGENT_FAILURE])?,
             Response::Identities(ref identities) => {
-                try!(buf.write_all(&[SSH2_AGENT_IDENTITIES_ANSWER]));
-                try!(buf.write_u32::<BigEndian>(identities.len() as u32));
+                buf.write_all(&[SSH2_AGENT_IDENTITIES_ANSWER])?;
+                buf.write_u32::<BigEndian>(identities.len() as u32)?;
 
                 for identity in identities {
-                    try!(write_string(&mut buf, &identity.key_blob));
-                    try!(write_string(&mut buf, &identity.key_comment.as_bytes()));
+                    write_string(&mut buf, &identity.key_blob)?;
+                    write_string(&mut buf, &identity.key_comment.as_bytes())?;
                 }
             }
             Response::SignResponse { ref key_format, ref signature } => {
-                try!(buf.write_all(&[SSH2_AGENT_SIGN_RESPONSE]));
+                buf.write_all(&[SSH2_AGENT_SIGN_RESPONSE])?;
 
                 let mut full_sig = Vec::new();
-                try!(write_string(&mut full_sig, key_format.as_bytes()));
-                try!(write_string(&mut full_sig, signature));
+                write_string(&mut full_sig, key_format.as_bytes())?;
+                write_string(&mut full_sig, signature)?;
 
-                try!(write_string(&mut buf, &full_sig));
+                write_string(&mut buf, &full_sig)?;
             }
         }
 
-        try!(w.write_u32::<BigEndian>(buf.len() as u32));
-        try!(w.write_all(&buf));
+        w.write_u32::<BigEndian>(buf.len() as u32)?;
+        w.write_all(&buf)?;
         Ok(())
     }
 }
