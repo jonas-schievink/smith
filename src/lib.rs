@@ -13,5 +13,4 @@ pub mod key;
 pub mod prompt;
 pub mod protocol;
 pub mod pubkey;
-pub mod shells;
 pub mod util;

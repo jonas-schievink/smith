@@ -130,15 +130,6 @@ impl Agent {
         })
     }
 
-    /// If configured to do so, this will output a shell script to set the SSH environment variables
-    /// so that other programs know how to reach the agent.
-    pub fn output_env_vars(&self) {
-        if let Some(ref shell) = self.conf.shell {
-            println!("{}", shell.export_var("SSH_AUTH_SOCK", self.sock_path.to_str().unwrap()));
-            println!("{}", shell.export_var("SSH_AGENT_PID", unsafe { ::libc::getpid() }));
-        }
-    }
-
     /// List available identities (public keys).
     ///
     /// This includes locked keys we want to unlock lazily. When a client attempts to use one of

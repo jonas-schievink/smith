@@ -7,22 +7,16 @@ extern crate clap;
 use smith::util;
 use smith::agent::Agent;
 use smith::config::AgentConfig;
-use smith::shells::Shell;
 
 use clap::{Arg, App, ArgMatches};
 use env_logger::LogBuilder;
 use log::LogLevelFilter;
 use std::error::Error;
-use std::str::FromStr;
 use std::env;
 
 /// Processes command line arguments by overwriting parts of the `AgentConfig` that are specified in
 /// `args`.
 fn process_args(args: &ArgMatches, conf: &mut AgentConfig) -> Result<(), Box<Error>> {
-    if let Some(shell) = args.value_of("shell") {
-        conf.shell = Some(try!(Shell::from_str(shell)));
-    }
-
     if let Some(sock) = args.value_of("bind_address") {
         conf.auth_sock = Some(sock.to_string());
     }
@@ -58,11 +52,6 @@ fn main() {
                       .version(env!("CARGO_PKG_VERSION"))
                       .author(env!("CARGO_PKG_AUTHORS"))
                       .about(env!("CARGO_PKG_DESCRIPTION"))
-                      .arg(Arg::with_name("shell")
-                               .long("shell")
-                               .value_name("SHELL")
-                               .help("Set the shell for which to output env vars")
-                               .takes_value(true))
                       .arg(Arg::with_name("bind_address")
                                .short("a")
                                .help("Bind to the given Unix Domain Socket")
@@ -82,6 +71,5 @@ fn main() {
     util::unwrap_or_exit(process_args(&matches, &mut agent_conf));
 
     let mut agent = util::unwrap_or_exit(Agent::new(agent_conf));
-    agent.output_env_vars();
     agent.run();
 }
