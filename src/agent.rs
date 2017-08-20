@@ -77,6 +77,9 @@ fn preload_keys() -> Vec<(Pubkey, PathBuf)> {
     }
 }
 
+/// Implements an SSH agent.
+///
+/// Communication is done using a `UnixListener`, which must be passed to `Agent::run`.
 pub struct Agent {
     /// Loaded (unlocked) private keys.
     loaded_keys: Vec<(Pubkey, PKey)>,
@@ -92,6 +95,17 @@ impl Agent {
             loaded_keys: Vec::new(),
             lazy_keys: preload_keys(),
         }
+    }
+
+    /// Starts servicing clients
+    pub fn run(&mut self, listener: UnixListener) -> ! {
+        for res in listener.incoming() {
+            if let Err(e) = self.handle_incoming(res) {
+                error!("{:?}: {}", e.kind(), e);
+            }
+        }
+
+        unreachable!();
     }
 
     /// List available identities (public keys).
@@ -223,16 +237,5 @@ impl Agent {
 
         // Apparently the client will just shut the connection down, which is reflected as an `Err`.
         // Maybe we can special-case this one day.
-    }
-
-    /// Starts servicing clients
-    pub fn run(&mut self, listener: UnixListener) -> ! {
-        for res in listener.incoming() {
-            if let Err(e) = self.handle_incoming(res) {
-                error!("{:?}: {}", e.kind(), e);
-            }
-        }
-
-        unreachable!();
     }
 }

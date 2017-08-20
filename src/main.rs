@@ -6,7 +6,7 @@ extern crate env_logger;
 extern crate unix_socket;
 extern crate xdg;
 
-use smith::agent::Agent;
+use smith::Agent;
 
 use clap::{Arg, App, ArgMatches};
 use env_logger::LogBuilder;
