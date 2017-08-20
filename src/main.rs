@@ -4,19 +4,19 @@ extern crate smith;
 extern crate log;
 extern crate env_logger;
 
-use smith::util;
 use smith::agent::Agent;
 use smith::config::AgentConfig;
 
 use clap::{Arg, App, ArgMatches};
 use env_logger::LogBuilder;
 use log::LogLevelFilter;
-use std::error::Error;
-use std::env;
 
-/// Processes command line arguments by overwriting parts of the `AgentConfig` that are specified in
-/// `args`.
-fn process_args(args: &ArgMatches, conf: &mut AgentConfig) -> Result<(), Box<Error>> {
+use std::error::Error;
+use std::{env, process};
+
+fn run(args: &ArgMatches) -> Result<(), Box<Error>> {
+    let mut conf = AgentConfig::default();
+
     if let Some(sock) = args.value_of("bind_address") {
         conf.auth_sock = Some(sock.to_string());
     }
@@ -25,7 +25,8 @@ fn process_args(args: &ArgMatches, conf: &mut AgentConfig) -> Result<(), Box<Err
         conf.remove_sock = true;
     }
 
-    Ok(())
+    let mut agent = Agent::new(conf)?;
+    agent.run();
 }
 
 fn init_logger(args: &ArgMatches) {
@@ -72,9 +73,11 @@ fn main() {
 
     init_logger(&matches);
 
-    let mut agent_conf = AgentConfig::default();
-    util::unwrap_or_exit(process_args(&matches, &mut agent_conf));
-
-    let mut agent = util::unwrap_or_exit(Agent::new(agent_conf));
-    agent.run();
+    match run(&matches) {
+        Ok(()) => {}
+        Err(e) => {
+            eprintln!("error: {}", e);
+            process::exit(1);
+        }
+    }
 }
