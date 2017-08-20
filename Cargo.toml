@@ -16,3 +16,8 @@ byteorder = "1.0"
 base64 = "0.6"
 openssl = "0.9"
 
+# FIXME: https://github.com/rust-lang/cargo/issues/4341
+# Remove this section once that issue is fixed
+[[bin]]
+name = "smith"
+doc = false
