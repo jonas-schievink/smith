@@ -1,8 +1,8 @@
 extern crate smith;
 
+#[macro_use] extern crate clap;
 extern crate log;
 extern crate env_logger;
-extern crate clap;
 
 use smith::util;
 use smith::agent::Agent;
@@ -48,22 +48,27 @@ fn init_logger(args: &ArgMatches) {
 }
 
 fn main() {
-    let matches = App::new(env!("CARGO_PKG_NAME"))
-                      .version(env!("CARGO_PKG_VERSION"))
-                      .author(env!("CARGO_PKG_AUTHORS"))
-                      .about(env!("CARGO_PKG_DESCRIPTION"))
-                      .arg(Arg::with_name("bind_address")
-                               .short("a")
-                               .help("Bind to the given Unix Domain Socket")
-                               .takes_value(true))
-                      .arg(Arg::with_name("debug")
-                               .short("d")
-                               .help("Enable debug output"))
-                      .arg(Arg::with_name("force")
-                               .short("f")
-                               .long("force")
-                               .help("Overwrite the socket file if it already exists"))
-                      .get_matches();
+    let mut app = app_from_crate!()
+        .arg(Arg::with_name("bind_address")
+            .short("a")
+            .help("Bind to the given Unix Domain Socket")
+            .takes_value(true))
+        .arg(Arg::with_name("debug")
+            .short("d")
+            .help("Enable debug output"))
+        .arg(Arg::with_name("force")
+            .short("f")
+            .long("force")
+            .help("Overwrite the socket file if it already exists"));
+
+    if cfg!(debug_assertions) {
+        // Add dev options
+        // TODO
+        app = app.subcommand(App::new("dev-auth")
+            .help("[developer command] authenticate with a running agent"));
+    }
+
+    let matches = app.get_matches();
 
     init_logger(&matches);
 
