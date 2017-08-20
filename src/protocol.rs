@@ -1,5 +1,8 @@
 //! This implements https://tools.ietf.org/html/draft-miller-ssh-agent-00
 //!
+//! I have carefully chosen to ignore the contained warning stating "It is inappropriate to use
+//! Internet-Drafts as reference material".
+//!
 //! SSH protocol version 1 is not supported. You shouldn't be using it anyways.
 
 use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
@@ -130,7 +133,7 @@ impl Request {
                         // Unknown flag bits are ignored, but will emit a warning
                         let bits = buf.read_u32::<BigEndian>()?;
                         SignFlags::from_bits(bits).unwrap_or_else(|| {
-                            warn!("ignoring unknown sign flag bits in 0x{:08X}", bits);
+                            warn!("ignoring unknown sign flag bits in 0x{:X}", bits);
                             SignFlags::from_bits_truncate(bits)
                         })
                     },

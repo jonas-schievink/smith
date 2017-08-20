@@ -161,14 +161,18 @@ impl Agent {
                 Response::Identities(self.list_identities())
             }
             Request::SignRequest { ref pubkey_blob, ref data, ref flags } => {
-                // FIXME flags are currently ignored
-                let _ = flags;
+                if flags.contains(SSH_AGENT_RSA_SHA2_256) && flags.contains(SSH_AGENT_RSA_SHA2_512) {
+                    error!("sign flags contain incompatible bits (flags = 0x{:X})", flags);
+                    return Response::Failure;
+                }
+
                 match self.find_or_unlock_private_key(pubkey_blob) {
                     Ok(priv_index) => {
                         debug!("performing sign request with unlocked private key #{}", priv_index);
                         let (ref pubkey, ref pkey) = self.loaded_keys[priv_index];
                         info!("signing with key {}", pubkey.comment);
 
+                        // FIXME check that no RSA_SHAx flags are set with non-rsa keys
 
                         let mut sha = Hasher::new(hash::MessageDigest::sha1()).unwrap();
                         sha.write_all(&data).unwrap();
