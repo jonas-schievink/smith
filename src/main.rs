@@ -1,32 +1,51 @@
 extern crate smith;
 
 #[macro_use] extern crate clap;
-extern crate log;
+#[macro_use] extern crate log;
 extern crate env_logger;
+extern crate unix_socket;
+extern crate xdg;
 
 use smith::agent::Agent;
-use smith::config::AgentConfig;
 
 use clap::{Arg, App, ArgMatches};
 use env_logger::LogBuilder;
 use log::LogLevelFilter;
+use unix_socket::UnixListener;
 
 use std::error::Error;
-use std::{env, process};
+use std::{env, process, io, fs};
+use std::path::PathBuf;
+
+/// Creates the Unix socket to use for the agent.
+///
+/// This socket must be publicly known to any application that wishes to use the agent, so we do not
+/// generate random file names.
+fn create_socket(path: Option<PathBuf>, force: bool) -> io::Result<UnixListener> {
+    let path = match path {
+        Some(path) => path,
+        None => {
+            let basedirs = xdg::BaseDirectories::new()?;
+            basedirs.place_runtime_file("smith.socket")?
+        }
+    };
+
+    if force && fs::metadata(&path).is_ok() {
+        // Path exists, remove it
+        info!("removing existing socket file {}", path.display());
+        fs::remove_file(&path)?;
+    }
+
+    info!("binding to {}", path.display());
+    UnixListener::bind(&path)
+}
 
 fn run(args: &ArgMatches) -> Result<(), Box<Error>> {
-    let mut conf = AgentConfig::default();
+    let path = args.value_of("bind_address").map(|s| PathBuf::from(s));
+    let listener = create_socket(path, args.is_present("force"))?;
 
-    if let Some(sock) = args.value_of("bind_address") {
-        conf.auth_sock = Some(sock.to_string());
-    }
-
-    if args.is_present("force") {
-        conf.remove_sock = true;
-    }
-
-    let mut agent = Agent::new(conf)?;
-    agent.run();
+    let mut agent = Agent::new();
+    agent.run(listener);
 }
 
 fn init_logger(args: &ArgMatches) {

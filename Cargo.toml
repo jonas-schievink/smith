@@ -9,12 +9,13 @@ description = "A simple SSH agent with lazy unlocking"
 log = "0.3"
 env_logger = "0.4"
 clap = "2.0"
-tempdir = "0.3"
 unix_socket = "0.5"
 libc = "0.2"
 byteorder = "1.0"
 base64 = "0.6"
 openssl = "0.9"
+# Binary-only:
+xdg = "2"
 
 # FIXME: https://github.com/rust-lang/cargo/issues/4341
 # Remove this section once that issue is fixed

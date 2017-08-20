@@ -1,9 +1,7 @@
-use config::AgentConfig;
 use prompt::PasswordPrompt;
 use protocol::*;
 use pubkey::Pubkey;
 
-use tempdir::TempDir;
 use unix_socket::{UnixListener, UnixStream};
 use openssl::rsa::Rsa;
 use openssl::hash::{self, Hasher};
@@ -80,14 +78,6 @@ fn preload_keys() -> Vec<(Pubkey, PathBuf)> {
 }
 
 pub struct Agent {
-    /// We hold on to an optional `TempDir` when we create a temporary directory for the socket
-    /// outselves. When dropped, it will delete the directory. However, that rarely happens since
-    /// destructors don't run when we're killed by a signal, so this is basically useless.
-    _tempdir: Option<TempDir>,
-    /// The unix domain socket listener. `None` when we're currently listening. This option dance
-    /// prevents borrow conflicts.
-    listener: Option<UnixListener>,
-
     /// Loaded (unlocked) private keys.
     loaded_keys: Vec<(Pubkey, PKey)>,
     /// List of public keys and absolute paths to their private counterparts we want to unlock
@@ -96,34 +86,12 @@ pub struct Agent {
 }
 
 impl Agent {
-    /// Creates a new agent instance from the given configuration.
-    pub fn new(conf: AgentConfig) -> io::Result<Self> {
-        let mut my_tempdir = None;
-        let sock_path = match conf.auth_sock {
-            Some(ref sock) => PathBuf::from(sock),
-            None => {
-                let tempdir = TempDir::new(concat!(env!("CARGO_PKG_NAME"), "-"))?;
-                let mut path = tempdir.path().to_path_buf();
-                path.push("agent.sock");
-                my_tempdir = Some(tempdir);
-                path
-            }
-        };
-
-        if conf.remove_sock && fs::metadata(&sock_path).is_ok() {
-            info!("removing existing socket file {}", sock_path.display());
-            fs::remove_file(&sock_path)?;
-        }
-
-        info!("binding to {}", sock_path.display());
-        let listener = UnixListener::bind(&sock_path)?;
-
-        Ok(Agent {
-            _tempdir: my_tempdir,
-            listener: Some(listener),
+    /// Creates a new agent instance.
+    pub fn new() -> Self {
+        Self {
             loaded_keys: Vec::new(),
             lazy_keys: preload_keys(),
-        })
+        }
     }
 
     /// List available identities (public keys).
@@ -254,9 +222,7 @@ impl Agent {
     }
 
     /// Starts servicing clients
-    pub fn run(&mut self) -> ! {
-        let listener = self.listener.take().expect("self.listener is None, did someone call \
-                                                    Agent::run recursively?");
+    pub fn run(&mut self, listener: UnixListener) -> ! {
         for res in listener.incoming() {
             if let Err(e) = self.handle_incoming(res) {
                 error!("{:?}: {}", e.kind(), e);
