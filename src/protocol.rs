@@ -1,54 +1,37 @@
+//! This implements https://tools.ietf.org/html/draft-miller-ssh-agent-00
+//!
+//! SSH protocol version 1 is not supported. You shouldn't be using it anyways.
+
 use byteorder::{ReadBytesExt, WriteBytesExt, BigEndian};
 
 use std::io;
 use std::io::prelude::*;
 
-// 3.1 Requests from client to agent for protocol 1 key operations
-/*
-const SSH_AGENTC_REQUEST_RSA_IDENTITIES: u8 = 1;
-const SSH_AGENTC_RSA_CHALLENGE: u8 = 3;
-const SSH_AGENTC_ADD_RSA_IDENTITY: u8 = 7;
-const SSH_AGENTC_REMOVE_RSA_IDENTITY: u8 = 8;
-const SSH_AGENTC_REMOVE_ALL_RSA_IDENTITIES: u8 = 9;
-const SSH_AGENTC_ADD_RSA_ID_CONSTRAINED: u8 = 24;
-*/
-// 3.2 Requests from client to agent for protocol 2 key operations
+// Requests
+const SSH_AGENTC_REQUEST_IDENTITIES                 : u8 = 11;
+const SSH_AGENTC_SIGN_REQUEST                       : u8 = 13;
+//const SSH_AGENTC_ADD_IDENTITY                       : u8 = 17;
+//const SSH_AGENTC_REMOVE_IDENTITY                    : u8 = 18;
+//const SSH_AGENTC_REMOVE_ALL_IDENTITIES              : u8 = 19;
+//const SSH_AGENTC_ADD_ID_CONSTRAINED                 : u8 = 25;
+//const SSH_AGENTC_ADD_SMARTCARD_KEY                  : u8 = 20;
+//const SSH_AGENTC_REMOVE_SMARTCARD_KEY               : u8 = 21;
+//const SSH_AGENTC_LOCK                               : u8 = 22;
+//const SSH_AGENTC_UNLOCK                             : u8 = 23;
+//const SSH_AGENTC_ADD_SMARTCARD_KEY_CONSTRAINED      : u8 = 26;
+//const SSH_AGENTC_EXTENSION                          : u8 = 27;
 
-const SSH2_AGENTC_REQUEST_IDENTITIES: u8 = 11;
-const SSH2_AGENTC_SIGN_REQUEST: u8 = 13;
-/*const SSH2_AGENTC_ADD_IDENTITY: u8 = 17;
-const SSH2_AGENTC_REMOVE_IDENTITY: u8 = 18;
-const SSH2_AGENTC_REMOVE_ALL_IDENTITIES: u8 = 19;
-const SSH2_AGENTC_ADD_ID_CONSTRAINED: u8 = 25;*/
-
-// 3.3 Key-type independent requests from client to agent
-
-/*const SSH_AGENTC_ADD_SMARTCARD_KEY: u8 = 20;
-const SSH_AGENTC_REMOVE_SMARTCARD_KEY: u8 = 21;
-const SSH_AGENTC_LOCK: u8 = 22;
-const SSH_AGENTC_UNLOCK: u8 = 23;
-const SSH_AGENTC_ADD_SMARTCARD_KEY_CONSTRAINED: u8 = 26;*/
-
-// 3.4 Generic replies from agent to client
-
+// Agent replies
 const SSH_AGENT_FAILURE: u8 = 5;
 const SSH_AGENT_SUCCESS: u8 = 6;
+//const SSH_AGENT_EXTENSION_FAILURE: u8 = 28;
+const SSH_AGENT_IDENTITIES_ANSWER: u8 = 12;
+const SSH_AGENT_SIGN_RESPONSE: u8 = 14;
 
-// 3.5 Replies from agent to client for protocol 1 key operations
-/*
-const SSH_AGENT_RSA_IDENTITIES_ANSWER: u8 = 2;
-const SSH_AGENT_RSA_RESPONSE: u8 = 4;
-*/
-// 3.6 Replies from agent to client for protocol 2 key operations
+// Signature flags
+//const SSH_AGENT_RSA_SHA2_256                         : u8 = 2;
+//const SSH_AGENT_RSA_SHA2_512                         : u8 = 4;
 
-const SSH2_AGENT_IDENTITIES_ANSWER: u8 = 12;
-const SSH2_AGENT_SIGN_RESPONSE: u8 = 14;
-
-// 3.7 Key constraint identifiers
-/*
-const SSH_AGENT_CONSTRAIN_LIFETIME: u8 = 1;
-const SSH_AGENT_CONSTRAIN_CONFIRM: u8 = 2;
-*/
 
 /// Max. length of a received message (for DoS protection).
 const MESSAGE_LENGTH_LIMIT: u32 = 4096;
@@ -102,9 +85,9 @@ pub enum Request {
     AddRsaIdConstrained,
     */
 
-    /// `SSH2_AGENTC_REQUEST_IDENTITIES`
+    /// `SSH_AGENTC_REQUEST_IDENTITIES`
     RequestIdentities,
-    /// `SSH2_AGENTC_SIGN_REQUEST`
+    /// `SSH_AGENTC_SIGN_REQUEST`
     SignRequest {
         /// Blob of the public key, as returned by `RequestIdentities` (encoded as per RFC4253
         /// "6.6. Public Key Algorithms").
@@ -135,8 +118,8 @@ impl Request {
         let mut buf = &buf[..];
 
         match buf.read_u8()? {
-            SSH2_AGENTC_REQUEST_IDENTITIES => Ok(Request::RequestIdentities),
-            SSH2_AGENTC_SIGN_REQUEST => {
+            SSH_AGENTC_REQUEST_IDENTITIES => Ok(Request::RequestIdentities),
+            SSH_AGENTC_SIGN_REQUEST => {
                 Ok(Request::SignRequest {
                     pubkey_blob: read_string(&mut buf)?,
                     data: read_string(&mut buf)?,
@@ -157,9 +140,9 @@ impl Request {
         let mut buf = Vec::new();
 
         match *self {
-            Request::RequestIdentities => buf.write_u8(SSH2_AGENTC_REQUEST_IDENTITIES)?,
+            Request::RequestIdentities => buf.write_u8(SSH_AGENTC_REQUEST_IDENTITIES)?,
             Request::SignRequest { ref pubkey_blob, ref data, ref flags } => {
-                buf.write_u8(SSH2_AGENTC_SIGN_REQUEST)?;
+                buf.write_u8(SSH_AGENTC_SIGN_REQUEST)?;
                 write_string(&mut buf, pubkey_blob)?;
                 write_string(&mut buf, data)?;
                 buf.write_u32::<BigEndian>(*flags)?;
@@ -210,7 +193,7 @@ impl Response {
         let mut buf = &buf[..];
 
         match buf.read_u8()? {
-            SSH2_AGENT_IDENTITIES_ANSWER => {
+            SSH_AGENT_IDENTITIES_ANSWER => {
                 let mut idents = Vec::new();
                 let num = buf.read_u32::<BigEndian>()?;
                 for _ in 0..num {
@@ -225,7 +208,7 @@ impl Response {
 
                 Ok(Response::Identities(idents))
             },
-            SSH2_AGENT_SIGN_RESPONSE => {
+            SSH_AGENT_SIGN_RESPONSE => {
                 let full_sig = read_string(&mut buf)?;
                 let mut full_sig = &full_sig[..];
                 let key_format = read_string(&mut full_sig)?;
@@ -249,10 +232,10 @@ impl Response {
         let mut buf = Vec::new();
 
         match *self {
-            Response::Success => buf.write_all(&[SSH_AGENT_SUCCESS])?,
-            Response::Failure => buf.write_all(&[SSH_AGENT_FAILURE])?,
+            Response::Success => buf.write_u8(SSH_AGENT_SUCCESS)?,
+            Response::Failure => buf.write_u8(SSH_AGENT_FAILURE)?,
             Response::Identities(ref identities) => {
-                buf.write_all(&[SSH2_AGENT_IDENTITIES_ANSWER])?;
+                buf.write_u8(SSH_AGENT_IDENTITIES_ANSWER)?;
                 buf.write_u32::<BigEndian>(identities.len() as u32)?;
 
                 for identity in identities {
@@ -261,7 +244,7 @@ impl Response {
                 }
             }
             Response::SignResponse { ref key_format, ref signature } => {
-                buf.write_all(&[SSH2_AGENT_SIGN_RESPONSE])?;
+                buf.write_u8(SSH_AGENT_SIGN_RESPONSE)?;
 
                 let mut full_sig = Vec::new();
                 write_string(&mut full_sig, key_format.as_bytes())?;
