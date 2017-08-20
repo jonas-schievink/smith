@@ -28,10 +28,13 @@ const SSH_AGENT_SUCCESS: u8 = 6;
 const SSH_AGENT_IDENTITIES_ANSWER: u8 = 12;
 const SSH_AGENT_SIGN_RESPONSE: u8 = 14;
 
-// Signature flags
-//const SSH_AGENT_RSA_SHA2_256                         : u8 = 2;
-//const SSH_AGENT_RSA_SHA2_512                         : u8 = 4;
 
+bitflags! {
+    pub struct SignFlags: u32 {
+        const SSH_AGENT_RSA_SHA2_256 = 2;
+        const SSH_AGENT_RSA_SHA2_512 = 4;
+    }
+}
 
 /// Max. length of a received message (for DoS protection).
 const MESSAGE_LENGTH_LIMIT: u32 = 4096;
@@ -94,8 +97,8 @@ pub enum Request {
         pubkey_blob: Vec<u8>,
         /// The data to sign.
         data: Vec<u8>,
-        /// Request flags, can only contain `SSH_AGENT_OLD_SIGNATURE`.
-        flags: u32,
+        /// Request flags.
+        flags: SignFlags,
     },
     /*/// `SSH2_AGENTC_ADD_IDENTITY`
     AddIdentity,
@@ -123,7 +126,14 @@ impl Request {
                 Ok(Request::SignRequest {
                     pubkey_blob: read_string(&mut buf)?,
                     data: read_string(&mut buf)?,
-                    flags: buf.read_u32::<BigEndian>()?,
+                    flags: {
+                        // Unknown flag bits are ignored, but will emit a warning
+                        let bits = buf.read_u32::<BigEndian>()?;
+                        SignFlags::from_bits(bits).unwrap_or_else(|| {
+                            warn!("ignoring unknown sign flag bits in 0x{:08X}", bits);
+                            SignFlags::from_bits_truncate(bits)
+                        })
+                    },
                 })
             }
             unknown => {
@@ -145,7 +155,7 @@ impl Request {
                 buf.write_u8(SSH_AGENTC_SIGN_REQUEST)?;
                 write_string(&mut buf, pubkey_blob)?;
                 write_string(&mut buf, data)?;
-                buf.write_u32::<BigEndian>(*flags)?;
+                buf.write_u32::<BigEndian>(flags.bits())?;
             }
 
             Request::Unknown => panic!("attempted to encode `Unknown` request type"),
