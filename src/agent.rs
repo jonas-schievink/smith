@@ -1,33 +1,54 @@
 use prompt::PasswordPrompt;
 use protocol::*;
-use pubkey::Pubkey;
+use pubkey::SshKey;
 
 use unix_socket::{UnixListener, UnixStream};
-use openssl::rsa::Rsa;
-use openssl::hash::{self, Hasher};
-use openssl::sign::Signer;
-use openssl::pkey::PKey;
 
-use std::env;
-use std::path::PathBuf;
+use std::path::Path;
 use std::io;
-use std::io::prelude::*;
-use std::fs::{self, File};
+use std::fs;
 use std::ffi::OsStr;
 
-/// Preloads public SSH keys from the user's `.ssh` directory.
-fn preload_keys() -> Vec<(Pubkey, PathBuf)> {
-    // FIXME this needs to be much more configurable
+/// Implements an SSH agent.
+///
+/// Communication is done using a `UnixListener`, which must be passed to `Agent::run`.
+pub struct Agent {
+    /// List of managed keys.
+    ///
+    /// May contain both locked and unlocked keys. All of these keys are reported to clients
+    /// connecting to the agent. This array is usually populated once on initialization, loading all
+    /// keys into memory.
+    // FIXME We should ensure that no 2 keys with the same pubkey blob are ever loaded
+    keys: Vec<SshKey>,
+}
 
-    if let Some(mut dir) = env::home_dir() {
-        dir.push(".ssh");
-        let mut keys = Vec::new();
+impl Agent {
+    /// Creates a new agent instance without any managed keys.
+    pub fn new() -> Self {
+        Self {
+            keys: Vec::new(),
+        }
+    }
 
-        let read_dir = match fs::read_dir(&dir) {
+    /// Tries to preload all keys found in the given directory.
+    ///
+    /// Does not recurse into subdirectories.
+    ///
+    /// The keys will be presented to clients, and will be unlocked upon use (assuming they are
+    /// password protected) by opening a dialog.
+    ///
+    /// Any errors that occur in this method will be logged, but are not returned to the caller. A
+    /// single unreadable SSH key will not prevent other keys from being preloaded, but will emit a
+    /// warning (assuming logging is configured correctly).
+    pub fn preload_user_keys_from_dir<P: AsRef<Path>>(&mut self, key_dir: P) {
+        let key_dir = key_dir.as_ref();
+        let key_count_pre = self.keys.len();
+
+        let read_dir = match fs::read_dir(key_dir) {
             Ok(rd) => rd,
             Err(e) => {
-                error!("couldn't read key directory {}: {}", dir.display(), e);
-                return Vec::new();
+                error!("couldn't read key directory {}: {}", key_dir.display(), e);
+                return;
             }
         };
 
@@ -46,55 +67,27 @@ fn preload_keys() -> Vec<(Pubkey, PathBuf)> {
             if path.extension() == Some(OsStr::new("pub")) {
                 // Only preload if the corresponding non-pub file exists
                 let priv_path = path.with_extension("");
-                if priv_path.metadata().is_ok() {
-                    let mut file = match File::open(&path) {
-                        Ok(f) => f,
-                        Err(e) => {
-                            error!("couldn't open {}, skipping ({})", path.display(), e);
-                            continue;
+                match priv_path.metadata() {
+                    Ok(_) => {
+                        match SshKey::from_paths(&path, priv_path) {
+                            Ok(pkey) => {
+                                info!("successfully preloaded public key '{}' from {}",
+                                    pkey.comment(), path.display());
+                                self.keys.push(pkey);
+                            }
+                            Err(e) => {
+                                error!("couldn't preload {}: {}", path.display(), e);
+                            }
                         }
-                    };
-
-                    match Pubkey::from_pub_file(&mut file) {
-                        Ok(pkey) => {
-                            info!("successfully preloaded public key from {} ({})",
-                                path.display(), pkey.comment);
-                            keys.push((pkey, priv_path.canonicalize().unwrap()));
-                        }
-                        Err(e) => {
-                            error!("couldn't preload {}: {}", path.display(), e);
-                        }
+                    }
+                    Err(e) => {
+                        error!("{} has no associated private key file ({})", path.display(), e);
                     }
                 }
             }
         }
 
-        info!("preloaded {} keys from {}", keys.len(), dir.display());
-        keys
-    } else {
-        error!("failed to determine the user's home dir, no keys will be preloaded");
-        Vec::new()
-    }
-}
-
-/// Implements an SSH agent.
-///
-/// Communication is done using a `UnixListener`, which must be passed to `Agent::run`.
-pub struct Agent {
-    /// Loaded (unlocked) private keys.
-    loaded_keys: Vec<(Pubkey, PKey)>,
-    /// List of public keys and absolute paths to their private counterparts we want to unlock
-    /// lazily.
-    lazy_keys: Vec<(Pubkey, PathBuf)>,
-}
-
-impl Agent {
-    /// Creates a new agent instance.
-    pub fn new() -> Self {
-        Self {
-            loaded_keys: Vec::new(),
-            lazy_keys: preload_keys(),
-        }
+        info!("preloaded {} keys from {}", self.keys.len() - key_count_pre, key_dir.display());
     }
 
     /// Starts servicing clients
@@ -113,97 +106,56 @@ impl Agent {
     /// This includes locked keys we want to unlock lazily. When a client attempts to use one of
     /// them, we'll ask the user for a password and block.
     fn list_identities(&self) -> Vec<Identity> {
-        self.lazy_keys
+        self.keys
             .iter()
-            .map(|&(ref pubkey, _)| pubkey)
-            .chain(self.loaded_keys
-                .iter()
-                .map(|&(ref pubkey, _)| pubkey))
-            .map(|pubkey| Identity {
-                key_blob: pubkey.data.clone(),
-                key_comment: pubkey.comment.clone(),
+            .map(|key| Identity {
+                key_blob: key.pub_key_blob().to_vec(),
+                key_comment: key.comment().to_string(),
             }).collect()
     }
 
-    /// Finds the private key belonging to the given public key blob. If the private key is not yet
-    /// unlocked, but its pubkey was loaded for lazy unlocking, this will prompt the user to
-    /// unlock the key.
-    ///
-    /// If successful, returns the index in `self.loaded_key` where the private key can be found.
-    /// If unlocking fails or the private key wasn't found at all, returns an `Err`.
-    fn find_or_unlock_private_key(&mut self, pubkey_blob: &[u8]) -> io::Result<usize> {
-        if let Some((index, _)) = self.loaded_keys
-                .iter().enumerate().find(|&(_, &(ref pubkey, _))| pubkey.data == pubkey_blob) {
-            return Ok(index);
-        }
-
-        // FIXME I'm ugly, refactor me <3
-        let (priv_index, old_index) = if let Some((index, &(ref pubkey, ref priv_path))) =
-                self.lazy_keys
-                    .iter().enumerate()
-                    .filter(|&(_, &(ref pubkey, _))| pubkey.data == pubkey_blob).next() {
-            // Try to unlock private key. If that fails, return `None`, if it succeeds, remove entry
-            // from `self.lazy_keys` and put it in `self.loaded_keys`.
-            info!("attempting to unlock {} ({})", priv_path.display(), pubkey.comment);
-
-            let mut priv_file = File::open(priv_path)?;
-            let mut pem_data = Vec::new();
-            priv_file.read_to_end(&mut pem_data)?;
-            let private_key = Rsa::private_key_from_pem_callback(&pem_data, |buf| {
-                Ok(PasswordPrompt::new(pubkey.comment.clone()).invoke(buf))
-            }).map_err(|_| io::Error::new(io::ErrorKind::Other, "ssl error :("))?;   // FIXME :-(
-
-            let pkey = PKey::from_rsa(private_key).unwrap();
-
-            self.loaded_keys.push(((*pubkey).clone(), pkey));
-
-            (self.loaded_keys.len() - 1, index)
-        } else {
-            // No matching key found.
-            return Err(io::Error::new(io::ErrorKind::NotFound, "no matching private key found"));
-        };
-
-        // Success! Remove old entry from `self.lazy_keys`.
-        self.lazy_keys.remove(old_index);
-
-        Ok(priv_index)
+    fn find_key(&mut self, pubkey_blob: &[u8]) -> Option<&mut SshKey> {
+        self.keys.iter_mut()
+            .find(|key| key.pub_key_blob() == pubkey_blob)
     }
 
     fn process_request(&mut self, req: &Request) -> Response {
+        // FIXME should just make this return a result, maybe with a quick_error context
         match *req {
             Request::RequestIdentities => {
                 Response::Identities(self.list_identities())
             }
             Request::SignRequest { ref pubkey_blob, ref data, ref flags } => {
-                if flags.contains(SSH_AGENT_RSA_SHA2_256) && flags.contains(SSH_AGENT_RSA_SHA2_512) {
-                    error!("sign flags contain incompatible bits (flags = 0x{:X})", flags);
-                    return Response::Failure;
-                }
+                match self.find_key(pubkey_blob) {
+                    Some(key) => {
+                        let comment = key.comment().to_string();
+                        let signature = {
+                            let priv_key = match key.unlock_with(|buf| {
+                                Ok(PasswordPrompt::new(comment).invoke(buf))
+                            }) {
+                                Ok(p) => p,
+                                Err(e) => {
+                                    error!("failed to unlock key: {}", e);
+                                    return Response::Failure;
+                                }
+                            };
 
-                match self.find_or_unlock_private_key(pubkey_blob) {
-                    Ok(priv_index) => {
-                        debug!("performing sign request with unlocked private key #{}", priv_index);
-                        let (ref pubkey, ref pkey) = self.loaded_keys[priv_index];
-                        info!("signing with key {}", pubkey.comment);
-
-                        // FIXME check that no RSA_SHAx flags are set with non-rsa keys
-
-                        let mut sha = Hasher::new(hash::MessageDigest::sha1()).unwrap();
-                        sha.write_all(&data).unwrap();
-                        let digest = sha.finish2().unwrap().to_vec();
-
-                        let mut signer = Signer::new(hash::MessageDigest::sha1(), &pkey).unwrap();
-                        signer.update(&digest).unwrap();
-                        let signature = signer.finish().unwrap();
+                            match priv_key.sign(data, flags) {
+                                Ok(signature) => signature,
+                                Err(e) => {
+                                    error!("failed to sign data: {}", e);
+                                    return Response::Failure;
+                                }
+                            }
+                        };
 
                         Response::SignResponse {
-                            key_format: pubkey.key_type.clone(),
+                            key_format: key.format_identifier().to_string(),
                             signature: signature,
                         }
                     }
-                    Err(e) => {
-                        warn!("failed to comply with sign request: {}", e);
-                        debug!("failed sign req with pubkey blob {:?}", pubkey_blob);
+                    None => {
+                        error!("no matching key for sign request");
                         Response::Failure
                     }
                 }

@@ -15,6 +15,7 @@ byteorder = "1.0"
 base64 = "0.6"
 openssl = "0.9"
 bitflags = "0.9"
+quick-error = "1"
 # Binary-only:
 xdg = "2"
 

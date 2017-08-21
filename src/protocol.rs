@@ -1,4 +1,9 @@
-//! This implements https://tools.ietf.org/html/draft-miller-ssh-agent-00
+//! This module provides a more high-level view of the underlying SSH agent protocol.
+//!
+//! It does not implement the protocol, but it implements (de-)serialization of messages. The actual
+//! protocol is implemented by `Agent`.
+//!
+//! Implements https://tools.ietf.org/html/draft-miller-ssh-agent-00
 //!
 //! I have carefully chosen to ignore the contained warning stating "It is inappropriate to use
 //! Internet-Drafts as reference material".
@@ -169,6 +174,8 @@ impl Request {
         Ok(())
     }
 }
+
+// FIXME make more stuff in here 0copy
 
 /// Part of the `SSH2_AGENT_IDENTITIES_ANSWER` response
 #[derive(Debug)]

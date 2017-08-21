@@ -1,5 +1,6 @@
 #[macro_use] extern crate log;
 #[macro_use] extern crate bitflags;
+#[macro_use] extern crate quick_error;
 extern crate unix_socket;
 extern crate libc;
 extern crate byteorder;

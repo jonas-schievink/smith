@@ -45,6 +45,14 @@ fn run(args: &ArgMatches) -> Result<(), Box<Error>> {
     let listener = create_socket(path, args.is_present("force"))?;
 
     let mut agent = Agent::new();
+
+    if let Some(mut dir) = env::home_dir() {
+        dir.push(".ssh");
+        agent.preload_user_keys_from_dir(&dir);
+    } else {
+        info!("couldn't determine user home dir, no keys will be preloaded");
+    }
+
     agent.run(listener);
 }
 

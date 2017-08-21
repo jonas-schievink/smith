@@ -1,5 +1,7 @@
 //! GUI password prompt using pinentry
 
+// TODO: Make this support other stuff than just pinentry, and possibly user-defined programs
+
 use std::cmp;
 use std::process::{Command, Stdio};
 use std::io::prelude::*;
