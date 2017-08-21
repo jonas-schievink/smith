@@ -5,10 +5,10 @@ use protocol::*;    // FIXME glob only needed for flags, wait for assoc. consts 
 use base64;
 use openssl::error::ErrorStack;
 use openssl::pkey::PKey;
-use openssl::hash::{self, Hasher};
+use openssl::hash::MessageDigest;
 use openssl::sign::Signer;
 
-use std::io::{self, Read, Write};
+use std::io::{self, Read};
 use std::fs::File;
 use std::path::Path;
 
@@ -136,20 +136,51 @@ pub struct PrivateKey {
 
 impl PrivateKey {
     /// Signs `data` with this key, according to RFC 4253 "6.6. Public Key Algorithms".
-    pub fn sign(&self, data: &[u8], flags: &SignFlags) -> Result<Vec<u8>, KeyError> {
+    pub fn sign(&self, data: &[u8], flags: &SignFlags) -> Result<Signature, KeyError> {
         assert!(self.pkey.rsa().is_ok(), "only RSA keys are supported");
 
         if flags.contains(SSH_AGENT_RSA_SHA2_256) && flags.contains(SSH_AGENT_RSA_SHA2_512) {
             return Err(KeyError::IllegalFlags(format!("sign flags contain incompatible bits (flags = 0x{:X})", flags).into()));
         }
 
-        let mut sha = Hasher::new(hash::MessageDigest::sha1())?;
-        sha.write_all(&data)?;
-        let digest = sha.finish2()?.to_vec();
+        // the digest defaults to sha1 but can be changed using `SignFlags`
+        let (algo_name, digest_type) = if flags.contains(SSH_AGENT_RSA_SHA2_256) {
+            debug!("using sha256 digest");
+            ("rsa-sha2-256", MessageDigest::sha256())
+        } else if flags.contains(SSH_AGENT_RSA_SHA2_512) {
+            debug!("using sha512 digest");
+            ("rsa-sha2-512", MessageDigest::sha512())
+        } else {
+            debug!("using sha1 digest");
+            ("ssh-rsa", MessageDigest::sha1())
+        };
 
-        let mut signer = Signer::new(hash::MessageDigest::sha1(), &self.pkey)?;
-        signer.update(&digest)?;
-        let signature = signer.finish()?;
-        Ok(signature)
+        let mut signer = Signer::new(digest_type, &self.pkey)?;
+        signer.update(data)?;
+        let blob = signer.finish()?;
+
+        Ok(Signature {
+            algo_name,
+            blob,
+        })
+    }
+}
+
+/// The result of a private key signing operation.
+///
+/// We take a shortcut here and assume that all signatures are encoded starting with a `string`
+/// denoting their name. This is true for all currently specified signatures.
+pub struct Signature {
+    algo_name: &'static str,
+    blob: Vec<u8>,
+}
+
+impl Signature {
+    pub fn algo_name(&self) -> &str {
+        self.algo_name
+    }
+
+    pub fn blob(&self) -> &[u8] {
+        &self.blob
     }
 }

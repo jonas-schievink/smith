@@ -201,7 +201,9 @@ pub enum Response {
 
     /// `SSH2_AGENT_SIGN_RESPONSE`
     SignResponse {
-        key_format: String,
+        /// Name of the signature algorithm used. This is prepended as a `string`.
+        algo_name: String,
+        /// Actual signature blob.
         signature: Vec<u8>,
     },
 }
@@ -229,13 +231,17 @@ impl Response {
                 Ok(Response::Identities(idents))
             },
             SSH_AGENT_SIGN_RESPONSE => {
+                // string     signature
                 let full_sig = read_string(&mut buf)?;
                 let mut full_sig = &full_sig[..];
-                let key_format = read_string(&mut full_sig)?;
+
+                // we assume all signature formats start with the name of the signature method
+                // (encoded as a string field)
+                let algo_name = read_string(&mut full_sig)?;
                 let signature = &full_sig[..];   // rest of the "full" signature
 
                 Ok(Response::SignResponse {
-                    key_format: String::from_utf8(key_format)
+                    algo_name: String::from_utf8(algo_name)
                         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?,
                     signature: Vec::from(signature),
                 })
@@ -263,11 +269,11 @@ impl Response {
                     write_string(&mut buf, &identity.key_comment.as_bytes())?;
                 }
             }
-            Response::SignResponse { ref key_format, ref signature } => {
+            Response::SignResponse { ref algo_name, ref signature } => {
                 buf.write_u8(SSH_AGENT_SIGN_RESPONSE)?;
 
                 let mut full_sig = Vec::new();
-                write_string(&mut full_sig, key_format.as_bytes())?;
+                write_string(&mut full_sig, algo_name.as_bytes())?;
                 write_string(&mut full_sig, signature)?;
 
                 write_string(&mut buf, &full_sig)?;

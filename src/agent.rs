@@ -150,8 +150,8 @@ impl Agent {
                         };
 
                         Response::SignResponse {
-                            key_format: key.format_identifier().to_string(),
-                            signature: signature,
+                            algo_name: signature.algo_name().to_string(),
+                            signature: signature.blob().to_vec(),
                         }
                     }
                     None => {
