@@ -145,15 +145,13 @@ impl PrivateKey {
 
         // the digest defaults to sha1 but can be changed using `SignFlags`
         let (algo_name, digest_type) = if flags.contains(SSH_AGENT_RSA_SHA2_256) {
-            debug!("using sha256 digest");
             ("rsa-sha2-256", MessageDigest::sha256())
         } else if flags.contains(SSH_AGENT_RSA_SHA2_512) {
-            debug!("using sha512 digest");
             ("rsa-sha2-512", MessageDigest::sha512())
         } else {
-            debug!("using sha1 digest");
             ("ssh-rsa", MessageDigest::sha1())
         };
+        debug!("using signature algorithm {}", algo_name);
 
         let mut signer = Signer::new(digest_type, &self.pkey)?;
         signer.update(data)?;
