@@ -70,10 +70,10 @@ impl Agent {
                 match priv_path.metadata() {
                     Ok(_) => {
                         match SshKey::from_paths(&path, priv_path) {
-                            Ok(pkey) => {
+                            Ok(key) => {
                                 info!("successfully preloaded public key '{}' from {}",
-                                    pkey.comment(), path.display());
-                                self.keys.push(pkey);
+                                    key.comment(), path.display());
+                                self.keys.push(key);
                             }
                             Err(e) => {
                                 error!("couldn't preload {}: {}", path.display(), e);
