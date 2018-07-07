@@ -1,7 +1,7 @@
 //! Private / public key type abstraction.
 //!
 //! Currently, we only support RSA keys.
-
+/*
 use openssl::rsa::Rsa;
 
 use std::io;
@@ -32,3 +32,4 @@ impl PublicKey {
         unimplemented!();
     }
 }
+*/

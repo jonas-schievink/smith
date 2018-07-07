@@ -1,10 +1,10 @@
 //! Utility for working with `.pub` SSH pubkey files
 
-use protocol::*;    // FIXME glob only needed for flags, wait for assoc. consts and use them instead
+use protocol::SignFlags;
 
 use base64;
 use openssl::error::ErrorStack;
-use openssl::pkey::PKey;
+use openssl::pkey::{PKey, Private};
 use openssl::hash::MessageDigest;
 use openssl::sign::Signer;
 
@@ -131,7 +131,7 @@ impl SshKey {
 
 /// A private SSH key.
 pub struct PrivateKey {
-    pkey: PKey,
+    pkey: PKey<Private>,
 }
 
 impl PrivateKey {
@@ -139,14 +139,14 @@ impl PrivateKey {
     pub fn sign(&self, data: &[u8], flags: &SignFlags) -> Result<Signature, KeyError> {
         assert!(self.pkey.rsa().is_ok(), "only RSA keys are supported");
 
-        if flags.contains(SSH_AGENT_RSA_SHA2_256) && flags.contains(SSH_AGENT_RSA_SHA2_512) {
+        if flags.contains(SignFlags::SSH_AGENT_RSA_SHA2_256) && flags.contains(SignFlags::SSH_AGENT_RSA_SHA2_512) {
             return Err(KeyError::IllegalFlags(format!("sign flags contain incompatible bits (flags = 0x{:X})", flags).into()));
         }
 
         // the digest defaults to sha1 but can be changed using `SignFlags`
-        let (algo_name, digest_type) = if flags.contains(SSH_AGENT_RSA_SHA2_256) {
+        let (algo_name, digest_type) = if flags.contains(SignFlags::SSH_AGENT_RSA_SHA2_256) {
             ("rsa-sha2-256", MessageDigest::sha256())
-        } else if flags.contains(SSH_AGENT_RSA_SHA2_512) {
+        } else if flags.contains(SignFlags::SSH_AGENT_RSA_SHA2_512) {
             ("rsa-sha2-512", MessageDigest::sha512())
         } else {
             ("ssh-rsa", MessageDigest::sha1())
@@ -155,7 +155,7 @@ impl PrivateKey {
 
         let mut signer = Signer::new(digest_type, &self.pkey)?;
         signer.update(data)?;
-        let blob = signer.finish()?;
+        let blob = signer.sign_to_vec()?;
 
         Ok(Signature {
             algo_name,

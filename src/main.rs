@@ -9,8 +9,7 @@ extern crate xdg;
 use smith::Agent;
 
 use clap::{Arg, App, ArgMatches};
-use env_logger::LogBuilder;
-use log::LogLevelFilter;
+use log::LevelFilter;
 use unix_socket::UnixListener;
 
 use std::error::Error;
@@ -57,22 +56,19 @@ fn run(args: &ArgMatches) -> Result<(), Box<Error>> {
 }
 
 fn init_logger(args: &ArgMatches) {
-    let mut builder = LogBuilder::new();
-    builder.format(|record| {
-        format!("[{}] {}: {}", record.level(), record.location().module_path(), record.args())
-    });
+    let mut builder = env_logger::Builder::from_default_env();
 
     let default_level = if args.is_present("debug") {
-        LogLevelFilter::Debug
+        LevelFilter::Debug
     } else {
-        LogLevelFilter::Info
+        LevelFilter::Info
     };
     builder.filter(None, default_level);
 
     if let Ok(s) = env::var("RUST_LOG") {
         builder.parse(&s);
     }
-    builder.init().unwrap();
+    builder.init();
 }
 
 fn main() {
