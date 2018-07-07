@@ -18,9 +18,3 @@ bitflags = "0.9"
 quick-error = "1"
 # Binary-only:
 xdg = "2"
-
-# FIXME: https://github.com/rust-lang/cargo/issues/4341
-# Remove this section once that issue is fixed
-[[bin]]
-name = "smith"
-doc = false
