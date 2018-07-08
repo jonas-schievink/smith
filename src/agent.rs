@@ -2,7 +2,7 @@ use prompt::PasswordPrompt;
 use protocol::*;
 use pubkey::SshKey;
 
-use unix_socket::{UnixListener, UnixStream};
+use std::os::unix::net::{UnixListener, UnixStream};
 
 use std::path::Path;
 use std::io;

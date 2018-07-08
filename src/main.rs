@@ -3,15 +3,14 @@ extern crate smith;
 #[macro_use] extern crate clap;
 #[macro_use] extern crate log;
 extern crate env_logger;
-extern crate unix_socket;
 extern crate xdg;
 
 use smith::Agent;
 
 use clap::{Arg, App, ArgMatches};
 use log::LevelFilter;
-use unix_socket::UnixListener;
 
+use std::os::unix::net::UnixListener;
 use std::error::Error;
 use std::{env, process, io, fs};
 use std::path::PathBuf;
