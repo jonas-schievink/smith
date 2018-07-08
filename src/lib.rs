@@ -8,7 +8,6 @@ extern crate openssl;
 extern crate base64;
 
 mod agent;
-pub mod key;
 pub mod prompt;
 pub mod protocol;
 pub mod pubkey;
