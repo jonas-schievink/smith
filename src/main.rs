@@ -4,6 +4,7 @@ extern crate smith;
 #[macro_use] extern crate log;
 extern crate env_logger;
 extern crate xdg;
+extern crate dirs;
 
 use smith::Agent;
 
@@ -44,11 +45,11 @@ fn run(args: &ArgMatches) -> Result<(), Box<Error>> {
 
     let mut agent = Agent::new();
 
-    if let Some(mut dir) = env::home_dir() {
+    if let Some(mut dir) = dirs::home_dir() {
         dir.push(".ssh");
         agent.preload_user_keys_from_dir(&dir);
     } else {
-        info!("couldn't determine user home dir, no keys will be preloaded");
+        warn!("couldn't determine user home dir, no keys will be preloaded");
     }
 
     agent.run(listener);

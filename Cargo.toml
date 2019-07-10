@@ -17,3 +17,4 @@ bitflags = "1"
 quick-error = "1"
 # Binary-only:
 xdg = "2"
+dirs = "2"
