@@ -2,7 +2,7 @@
 name = "smith"
 version = "0.1.0"
 authors = ["Jonas Schievink <jonasschievink@gmail.com>"]
-license = "CC0"
+license = "0BSD"
 description = "A simple SSH agent with lazy unlocking"
 
 [dependencies]
