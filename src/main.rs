@@ -66,7 +66,7 @@ fn init_logger(args: &ArgMatches) {
     builder.filter(None, default_level);
 
     if let Ok(s) = env::var("RUST_LOG") {
-        builder.parse(&s);
+        builder.parse_filters(&s);
     }
     builder.init();
 }
