@@ -89,7 +89,7 @@ fn main() {
         // Add dev options
         // TODO
         app = app.subcommand(App::new("dev-auth")
-            .help("[developer command] authenticate with a running agent"));
+            .about("[developer command] authenticate with a running agent"));
     }
 
     let matches = app.get_matches();
