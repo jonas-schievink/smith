@@ -4,12 +4,12 @@ use protocol::SignFlags;
 
 use base64;
 use openssl::error::ErrorStack;
-use openssl::pkey::{PKey, Private};
 use openssl::hash::MessageDigest;
+use openssl::pkey::{PKey, Private};
 use openssl::sign::Signer;
 
-use std::io::{self, Read};
 use std::fs::File;
+use std::io::{self, Read};
 use std::path::Path;
 
 // FIXME: Investigate security implications of autoloading possibly unencrypted private keys into memory
@@ -19,11 +19,11 @@ quick_error! {
     pub enum KeyError {
         SslError(err: ErrorStack) {
             from()
-            description("openssl operation failed")
+            display("openssl operation failed: {}", err)
         }
         IoError(err: io::Error) {
             from()
-            description("i/o error")
+            display("i/o error: {}", err)
         }
         // `SignFlags` passed to `PrivateKey::sign` not valid for key type
         IllegalFlags(msg: String) {}
@@ -57,7 +57,7 @@ impl SshKey {
     pub fn from_paths<P1, P2>(pub_path: P1, priv_path: P2) -> io::Result<Self>
     where
         P1: AsRef<Path>,
-        P2: AsRef<Path>
+        P2: AsRef<Path>,
     {
         let (mut pub_file, mut priv_file) = (File::open(pub_path)?, File::open(priv_path)?);
 
@@ -72,8 +72,10 @@ impl SshKey {
         // FIXME we should probably accept all whitespace, but `split_whitespace_n` isn't a thing
         let mut splitn = pub_content.splitn(3, ' ');
         let key_type = splitn.next().unwrap().trim().to_string();
-        let data_encoded = splitn.next().ok_or(io::Error::new(io::ErrorKind::InvalidData,
-                                                              "no pubkey data blob found"))?;
+        let data_encoded = splitn.next().ok_or(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "no pubkey data blob found",
+        ))?;
         let comment = splitn.next().unwrap_or("").trim().to_string();
 
         Ok(SshKey {
@@ -111,7 +113,9 @@ impl SshKey {
     ///
     /// The key will stay unlocked when this method returns.
     pub fn unlock_with<F>(&mut self, password_callback: F) -> Result<&PrivateKey, ErrorStack>
-    where F: FnOnce(&mut [u8]) -> Result<usize, ErrorStack> {
+    where
+        F: FnOnce(&mut [u8]) -> Result<usize, ErrorStack>,
+    {
         // FIXME: This would benefit from the `get_or_insert` methods, which were just recently
         // stabilized
         if let Some(ref pkey) = self.unlocked_key {
@@ -139,8 +143,16 @@ impl PrivateKey {
     pub fn sign(&self, data: &[u8], flags: &SignFlags) -> Result<Signature, KeyError> {
         assert!(self.pkey.rsa().is_ok(), "only RSA keys are supported");
 
-        if flags.contains(SignFlags::SSH_AGENT_RSA_SHA2_256) && flags.contains(SignFlags::SSH_AGENT_RSA_SHA2_512) {
-            return Err(KeyError::IllegalFlags(format!("sign flags contain incompatible bits (flags = 0x{:X})", flags).into()));
+        if flags.contains(SignFlags::SSH_AGENT_RSA_SHA2_256)
+            && flags.contains(SignFlags::SSH_AGENT_RSA_SHA2_512)
+        {
+            return Err(KeyError::IllegalFlags(
+                format!(
+                    "sign flags contain incompatible bits (flags = 0x{:X})",
+                    flags
+                )
+                .into(),
+            ));
         }
 
         // the digest defaults to sha1 but can be changed using `SignFlags`
@@ -157,10 +169,7 @@ impl PrivateKey {
         signer.update(data)?;
         let blob = signer.sign_to_vec()?;
 
-        Ok(Signature {
-            algo_name,
-            blob,
-        })
+        Ok(Signature { algo_name, blob })
     }
 }
 
