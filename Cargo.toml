@@ -15,6 +15,5 @@ base64 = "0.13.0"
 openssl = "0.10"
 bitflags = "1"
 quick-error = "2.0.0"
-# Binary-only:
 xdg = "2.2.0"
 dirs = "3.0.1"

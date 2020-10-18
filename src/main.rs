@@ -1,15 +1,22 @@
-extern crate smith;
-
-#[macro_use]
-extern crate clap;
 #[macro_use]
 extern crate log;
-extern crate dirs;
-extern crate env_logger;
-extern crate xdg;
+#[macro_use]
+extern crate bitflags;
+#[macro_use]
+extern crate quick_error;
+extern crate base64;
+extern crate byteorder;
+#[macro_use]
+extern crate clap;
+extern crate libc;
+extern crate openssl;
 
-use smith::Agent;
+mod agent;
+mod prompt;
+mod protocol;
+mod pubkey;
 
+use agent::Agent;
 use clap::{App, Arg, ArgMatches};
 use log::LevelFilter;
 

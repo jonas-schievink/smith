@@ -89,6 +89,7 @@ impl SshKey {
     }
 
     /// Returns the SSH key format identifier (eg. "ssh-rsa").
+    #[allow(unused)]
     pub fn format_identifier(&self) -> &str {
         &self.key_type
     }
@@ -125,11 +126,6 @@ impl SshKey {
         let pkey = PKey::private_key_from_pem_callback(&self.priv_file, password_callback)?;
         self.unlocked_key = Some(PrivateKey { pkey });
         Ok(self.unlocked_key.as_ref().unwrap())
-    }
-
-    /// Locks the private key if it is unlocked. If not, does nothing.
-    pub fn lock(&mut self) {
-        self.unlocked_key.take();
     }
 }
 
